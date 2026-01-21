@@ -20,7 +20,7 @@ import pymongo
 from telebot import types
 
 # --- ২. কনফিগারেশন (Configuration) ---
-BOT_TOKEN = '8348660690:AAH84DwkNBfUOqoWcl3s2tRartTQZFqm4I0' 
+BOT_TOKEN = '8348660690:AAFdZ11IxHSeX5NVFqOWnkXfSlRbTqDZ32I' 
 MONGO_URL = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 
 # --- ৩. ডাটাবেস কানেকশন ---
