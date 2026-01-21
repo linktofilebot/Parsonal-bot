@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 
-# --- অটো লাইব্রেরি ইনস্টলেশন সিস্টেম ---
+# --- ১. অটো লাইব্রেরি ইন্সটলেশন (Auto Install Requirements) ---
 def install_requirements():
     requirements = ['pyTelegramBotAPI', 'pymongo', 'requests', 'dnspython']
     for lib in requirements:
@@ -12,6 +12,7 @@ def install_requirements():
             print(f"Installing {lib}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
 
+# কোড রান হওয়ার সাথে সাথে লাইব্রেরি চেক করবে
 install_requirements()
 
 import telebot
@@ -19,29 +20,26 @@ import requests
 import pymongo
 from telebot import types
 
-# ==========================================
-# --- আপনার দেওয়া কনফিগারেশন ---
-# ==========================================
+# --- ২. কনফিগারেশন (Configuration) ---
 BOT_TOKEN = '8348660690:AAEAQUDHJm5QTZv4YMr7DrvddYPvzQF0-Wk' 
 MONGO_URL = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
-# ==========================================
 
-# ডাটাবেস সেটআপ
+# --- ৩. ডাটাবেস কানেকশন (Database Connection) ---
 try:
     client = pymongo.MongoClient(MONGO_URL)
-    db = client['FinalMovieBot_V3']
+    db = client['ProMovieBot_Final']
     config_col = db['user_configs']
     print("✅ MongoDB Connected Successfully!")
 except Exception as e:
-    print(f"❌ MongoDB Error: {e}")
+    print(f"❌ MongoDB Connection Error: {e}")
     sys.exit()
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# ইউজার স্টেট ট্র্যাক করার জন্য
+# ইউজার স্টেট ট্র্যাক করার জন্য মেমোরি (Temporary Storage)
 user_states = {}
 
-# ডাটাবেস থেকে সেটিংস নেওয়া
+# ডাটাবেস থেকে সেটিংস লোড করার ফাংশন
 def get_settings(user_id):
     data = config_col.find_one({"user_id": user_id})
     if not data:
@@ -60,8 +58,9 @@ def get_settings(user_id):
         return default
     return data
 
-# --- কিবোর্ড মেনু ---
-def main_menu():
+# --- ৪. কিবোর্ড মেনু (Keyboards) ---
+
+def main_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.row("🆕 Create Post", "📋 My Settings")
     markup.row("⚙️ Setup Bot", "📖 Help")
@@ -73,165 +72,174 @@ def setup_inline():
         types.InlineKeyboardButton("🔊 Language", callback_data="set_lang"),
         types.InlineKeyboardButton("💿 Episodes", callback_data="set_eps"),
         types.InlineKeyboardButton("🔑 API Key", callback_data="set_api"),
-        types.InlineKeyboardButton("🔗 Shortener URL", callback_data="set_shortener_url"),
-        types.InlineKeyboardButton("📥 Guide Link", callback_data="set_dl_guide"),
+        types.InlineKeyboardButton("🔗 Shortener URL", callback_data="set_url"),
+        types.InlineKeyboardButton("📥 Guide Link", callback_data="set_guide"),
         types.InlineKeyboardButton("📢 Channels", callback_data="set_channels"),
         types.InlineKeyboardButton("🔞 Backup Link", callback_data="set_backup"),
         types.InlineKeyboardButton("🔗 Share Link", callback_data="set_share")
     )
     return markup
 
-# --- লিঙ্ক শর্টনার লজিক ---
+# --- ৫. লিঙ্ক শর্টনার লজিক (URL Shortener Logic) ---
 def get_short_link(long_url, api_key, api_url):
     if api_key == "None" or not api_key:
         return long_url
     try:
-        # API URL ক্লিন করা
-        clean_url = api_url.split('?')[0]
+        clean_url = api_url.split('?')[0].strip()
         params = {'api': api_key, 'url': long_url}
         res = requests.get(clean_url, params=params, timeout=15)
         
         if res.status_code == 200:
             try:
                 data = res.json()
-                return data.get('shortenedUrl', data.get('url', long_url))
+                # শর্টনার অনুযায়ী বিভিন্ন ফরম্যাট হ্যান্ডলিং
+                return data.get('shortenedUrl', data.get('url', res.text.strip()))
             except:
                 return res.text.strip()
         return long_url
     except:
         return long_url
 
-# --- মেইন হ্যান্ডলারস ---
+# --- ৬. মেইন মেসেজ হ্যান্ডলারস (Message Handlers) ---
+
 @bot.message_handler(commands=['start'])
-def welcome(message):
+def start_bot(message):
     get_settings(message.chat.id)
     bot.send_message(
         message.chat.id, 
-        "🚀 **মুভি পোস্ট মেকার প্রলু ভার্সনে স্বাগতম!**\n\nসবকিছু কন্ট্রোল করার জন্য নিচের বাটনগুলো ব্যবহার করুন।",
-        reply_markup=main_menu(),
-        parse_mode="Markdown"
+        "🚀 <b>মুভি পোস্ট মেকার প্রলু ভার্সনে স্বাগতম!</b>\n\nসবকিছু কন্ট্রোল করার জন্য নিচের বাটনগুলো ব্যবহার করুন।",
+        reply_markup=main_keyboard(),
+        parse_mode="HTML"
     )
 
 @bot.message_handler(func=lambda message: True)
-def handle_buttons(message):
+def handle_reply_buttons(message):
     user_id = message.chat.id
     if message.text == "🆕 Create Post":
-        msg = bot.send_message(user_id, "🖼 **প্রথমে মুভির লগো বা পোস্টার (ছবি) পাঠান:**")
-        bot.register_next_step_handler(msg, process_logo_step)
+        msg = bot.send_message(user_id, "🖼 <b>প্রথমে মুভির লগো বা পোস্টার (ছবি) পাঠান:</b>", parse_mode="HTML")
+        bot.register_next_step_handler(msg, step_1_receive_logo)
 
     elif message.text == "📋 My Settings":
         s = get_settings(user_id)
         ch_list = ", ".join(s['channels']) if s['channels'] else "None"
-        info = (f"📊 **আপনার বর্তমান সেটিংস:**\n\n"
-                f"🔊 ভাষা: {s['lang']}\n"
-                f"💿 এপিসোড: {s['eps']}\n"
-                f"🔗 API URL: {s['shortener_url']}\n"
-                f"🔑 API Key: {s['api_key']}\n"
-                f"📢 চ্যানেল: {ch_list}")
-        bot.send_message(user_id, info, reply_markup=main_menu())
+        info = (f"📊 <b>আপনার বর্তমান সেটিংস:</b>\n\n"
+                f"🔊 ভাষা: <code>{s['lang']}</code>\n"
+                f"💿 এপিসোড: <code>{s['eps']}</code>\n"
+                f"🔗 API URL: <code>{s['shortener_url']}</code>\n"
+                f"🔑 API Key: <code>{s['api_key']}</code>\n"
+                f"📢 চ্যানেল: <code>{ch_list}</code>")
+        bot.send_message(user_id, info, reply_markup=main_keyboard(), parse_mode="HTML")
 
     elif message.text == "⚙️ Setup Bot":
-        bot.send_message(user_id, "⚙️ **সেটিংস পরিবর্তন করতে নিচের বাটন ক্লিক করুন:**", reply_markup=setup_inline())
+        bot.send_message(user_id, "⚙️ <b>কোন তথ্যটি পরিবর্তন করতে চান?</b>", reply_markup=setup_inline(), parse_mode="HTML")
 
     elif message.text == "📖 Help":
-        bot.send_message(user_id, "নির্দেশনা:\n১. Setup বাটন থেকে API Key ও Shortener URL সেট করুন।\n২. চ্যানেল ইউজারনেম (@ChannelName) সেট করুন।\n৩. Create Post এ ক্লিক করে স্টেপগুলো ফলো করুন।")
+        help_txt = ("📖 <b>নির্দেশনা:</b>\n\n"
+                    "১. প্রথমে 'Setup Bot' এ গিয়ে API Key ও চ্যানেল সেট করুন।\n"
+                    "২. বটকে অবশ্যই আপনার চ্যানেলে Admin বানাতে হবে।\n"
+                    "৩. 'Create Post' এ ক্লিক করে ছবি, নাম ও লিঙ্ক দিন।\n"
+                    "৪. বট অটোমেটিক লিঙ্ক শর্ট করে আপনার চ্যানেলে পাঠিয়ে দিবে।")
+        bot.send_message(user_id, help_txt, parse_mode="HTML")
 
-# --- পোস্ট তৈরির স্টেপ বাই স্টেপ লজিক ---
+# --- ৭. পোস্ট তৈরির স্টেপ-বাই-স্টেপ সিস্টেম ---
 
-def process_logo_step(message):
+def step_1_receive_logo(message):
     if message.content_type != 'photo':
-        bot.send_message(message.chat.id, "❌ এটি ছবি নয়! আবার 'Create Post' এ ক্লিক করুন।")
+        bot.send_message(message.chat.id, "❌ এটি ছবি নয়! আবার 'Create Post' ক্লিক করুন।")
         return
-    user_states[message.chat.id] = {'photo': message.photo[-1].file_id}
-    msg = bot.send_message(message.chat.id, "📝 **এবার মুভি বা ড্রামার নাম লিখে পাঠান:**")
-    bot.register_next_step_handler(msg, process_name_step)
+    user_states[message.chat.id] = {'photo_id': message.photo[-1].file_id}
+    msg = bot.send_message(message.chat.id, "📝 <b>এবার মুভি বা ড্রামার নাম লিখে পাঠান:</b>", parse_mode="HTML")
+    bot.register_next_step_handler(msg, step_2_receive_name)
 
-def process_name_step(message):
-    user_states[message.chat.id]['name'] = message.text.upper()
-    msg = bot.send_message(message.chat.id, "🔗 **সবশেষে মুভির মেইন লিঙ্কটি (Link) পাঠান:**")
-    bot.register_next_step_handler(msg, process_final_step)
+def step_2_receive_name(message):
+    user_states[message.chat.id]['movie_name'] = message.text.upper()
+    msg = bot.send_message(message.chat.id, "🔗 <b>সবশেষে মুভির মেইন লিঙ্ক (Direct URL) পাঠান:</b>", parse_mode="HTML")
+    bot.register_next_step_handler(msg, step_3_final_process)
 
-def process_final_step(message):
+def step_3_final_process(message):
     user_id = message.chat.id
     main_url = message.text
     data = user_states.get(user_id)
     s = get_settings(user_id)
 
     if not data:
-        bot.send_message(user_id, "❌ কিছু ভুল হয়েছে, আবার শুরু করুন।")
+        bot.send_message(user_id, "❌ এরর হয়েছে, নতুন করে শুরু করুন।")
         return
 
-    wait = bot.send_message(user_id, "⏳ লিঙ্ক শর্ট হচ্ছে এবং পোস্ট তৈরি হচ্ছে...")
-    
-    # লিঙ্ক শর্ট করা
-    short_url = get_short_link(main_url, s['api_key'], s['shortener_url'])
+    wait_msg = bot.send_message(user_id, "⏳ <b>প্রসেসিং... লিঙ্ক শর্ট করা হচ্ছে।</b>", parse_mode="HTML")
 
-    # ডিজাইন ফরম্যাট
+    # লিঙ্ক শর্ট করা
+    short_link = get_short_link(main_url, s['api_key'], s['shortener_url'])
+
+    # ডিজাইন (Bold Labels + Code Content)
     post_design = f"""
 ╔════════════════════════╗
-     ✨ {data['name']} ✨
+     ✨ <b>{data['movie_name']}</b> ✨
 ╚════════════════════════╝
 
-🎬 Drama Name : {data['name']}
-🔊 Language   : {s['lang']}
-💿 Episodes   : {s['eps']}
+🎬 <b>Drama Name :</b> <code>{data['movie_name']}</code>
+🔊 <b>Language   :</b> <code>{s['lang']}</code>
+💿 <b>Episodes   :</b> <code>{s['eps']}</code>
 
-📥 Watch / Download Link:
-🔗 {short_url}
+📥 <b>Watch / Download Link:</b>
+🔗 <code>{short_link}</code>
 
-📥 How to Download:
-🔗 {s['dl_guide']}
+📥 <b>How to Download:</b>
+🔗 <code>{s['dl_guide']}</code>
 
-📢 Share Channel:
-🔗 {s['share_link']}
+📢 <b>Share Channel:</b>
+🔗 <code>{s['share_link']}</code>
 
-🔞 Join Our Backup Channel:
-🔗 {s['backup_link']}
+🔞 <b>Join Our Backup Channel:</b>
+🔗 <code>{s['backup_link']}</code>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-     🍿 ENJOY YOUR DRAMA 🍿
+   🍿 <b>ENJOY YOUR DRAMA</b> 🍿
     """
 
-    # ইউজারকে প্রিভিউ (ক্লিক টু কপি মোড)
-    bot.send_photo(user_id, data['photo'], caption=f"<code>{post_design}</code>", parse_mode='HTML')
+    # ইউজারকে প্রিভিউ পাঠানো (ক্লিক টু কপি)
+    bot.send_photo(user_id, data['photo_id'], caption=post_design, parse_mode='HTML')
 
-    # চ্যানেলে অটো পোস্ট
-    success = 0
-    for ch in s['channels']:
+    # সেট করা চ্যানেলগুলোতে অটো পোস্টিং
+    success_count = 0
+    for channel in s['channels']:
         try:
-            bot.send_photo(ch, data['photo'], caption=post_design, parse_mode='HTML')
-            success += 1
-        except: pass
+            bot.send_photo(channel, data['photo_id'], caption=post_design, parse_mode='HTML')
+            success_count += 1
+        except Exception as e:
+            print(f"Error posting to {channel}: {e}")
 
-    bot.delete_message(user_id, wait.message_id)
-    bot.send_message(user_id, f"✅ পোস্ট তৈরি এবং {success}টি চ্যানেলে পাঠানো হয়েছে!", reply_markup=main_menu())
-    user_states.pop(user_id, None) # ডাটা ক্লিয়ার
+    bot.delete_message(user_id, wait_msg.message_id)
+    bot.send_message(user_id, f"✅ <b>পোস্ট তৈরি এবং {success_count}টি চ্যানেলে পাঠানো হয়েছে!</b>", reply_markup=main_keyboard(), parse_mode="HTML")
+    
+    # মেমোরি ক্লিয়ার
+    user_states.pop(user_id, None)
 
-# --- সেটিংস আপডেট বাটন হ্যান্ডলার ---
+# --- ৮. সেটিংস আপডেট সিস্টেম (Inline Callback) ---
+
 @bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
+def handle_setup_callbacks(call):
     labels = {
-        "set_lang": "Language", "set_eps": "Episodes", "set_api": "API Key",
-        "set_shortener_url": "Shortener API URL", "set_dl_guide": "Guide Link",
-        "set_channels": "Channels (@ch1, @ch2)", "set_backup": "Backup Link",
-        "set_share": "Share Link"
+        "set_lang": "Language", "set_eps": "Episodes", "set_api": "Shortener API Key",
+        "set_url": "Shortener API URL", "set_guide": "Guide Link",
+        "set_channels": "Channels (@ch1, @ch2)", "set_backup": "Backup Link", "set_share": "Share Link"
     }
     field = call.data.replace("set_", "")
     if call.data in labels:
-        msg = bot.send_message(call.message.chat.id, f"📥 আপনার নতুন **{labels[call.data]}** লিখে পাঠান:")
-        bot.register_next_step_handler(msg, update_settings_db, field)
+        msg = bot.send_message(call.message.chat.id, f"📥 নতুন <b>{labels[call.data]}</b> লিখে পাঠান:", parse_mode="HTML")
+        bot.register_next_step_handler(msg, update_config_in_db, field)
     bot.answer_callback_query(call.id)
 
-def update_settings_db(message, field):
+def update_config_in_db(message, field):
     user_id = message.chat.id
     val = message.text
     if field == "channels":
         val = [c.strip() for c in val.split(',')]
     
     config_col.update_one({"user_id": user_id}, {"$set": {field: val}})
-    bot.send_message(user_id, "✅ তথ্যটি সফলভাবে আপডেট করা হয়েছে!", reply_markup=main_menu())
+    bot.send_message(user_id, "✅ <b>তথ্যটি সফলভাবে আপডেট করা হয়েছে!</b>", reply_markup=main_keyboard(), parse_mode="HTML")
 
-# বট চালু
+# --- ৯. বট রান করা ---
 if __name__ == '__main__':
-    print("🤖 Bot is Online...")
+    print("🤖 Bot is starting up...")
     bot.infinity_polling()
